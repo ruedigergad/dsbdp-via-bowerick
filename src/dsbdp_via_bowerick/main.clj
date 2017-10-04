@@ -20,12 +20,68 @@
     [dsbdp.data-processing-dsl :refer :all])
   (:gen-class))
 
+(def pcap-processing-dsl-expression
+  {:output-type :java-map
+   :rules [['pcap-off '(int 16)]
+           ['off '(cond
+                    (= 2 (int32be (+ pcap-off 0))) (+ pcap-off 4)
+                    (and
+                      (or
+                        (= 0 (int16 (+ pcap-off 0)))
+                        (= 4 (int16 (+ pcap-off 0))))
+                      (= 1 (int16 (+ pcap-off 2)))
+                      (= 0x800 (int16 (+ pcap-off 14)))) (+ pcap-off 16)
+                    :default (+ pcap-off 14))]
+           ['protocol '(str "Ethernet")]
+           ['dst '(eth-mac-addr-str 0)]
+           ['src '(eth-mac-addr-str 6)]
+           ['data [['protocol '(str "IPv4")]
+                   ['len '(int16 (+ off 2))]
+                   ['src '(ipv4-addr-str (+ off 12))]
+                   ['dst '(ipv4-addr-str (+ off 16))]
+                   ['protocol-id '(int8 (+ off 9))]
+                   ['data [
+                           '(= 17 __1_protocol-id)
+                             [['protocol '(str "UDP")]
+                              ['src '(int16 (+ off 20))]
+                              ['dst '(int16 (+ off 22))]
+                              ['summary '(str __2_protocol ": " __2_src " -> " __2_dst)]]
+                           '(= 6 __1_protocol-id)
+                             [['protocol '(str "TCP")]
+                              ['src '(int16 (+ off 20))]
+                              ['dst '(int16 (+ off 22))]
+                              ['flags-value '(int8 (+ off 33))]
+                              ['flags '(reduce-kv
+                                         #=(eval
+                                             `(fn [r# k# v#]
+                                                (cond
+                                                  (> (bit-and ~'__2_flags-value (bit-shift-left 1 k#)) 0)
+                                                    (conj r# v#)
+                                                  :default r#)))
+                                         #{}
+                                         ["FIN" "SYN" "RST" "PSH" "ACK" "URG" "ECE" "CWR"])]
+                              ['summary '(str __2_protocol __2_flags ": " __2_src " -> " __2_dst)]]
+                         '(= 1 __1_protocol-id)
+                           [['protocol '(str "ICMP")]
+                            ['type '(condp = (int8 (+ off 20))
+                                      0 "Echo Reply"
+                                      3 "Destination Unreachable"
+                                      8 "Echo Request"
+                                     (str "Unknown ICMP Type:" (int8 (+ off 20))))]
+                            ['seq-no '(int16 (+ off 26))]
+                            ['summary '(str "ICMP: " __2_type ", Seq.: " __2_seq-no)]]]]
+                  ['summary '(str __1_protocol ": " __1_src " -> " __1_dst)]]]
+           ['summary '(str protocol ": " src " -> " dst)]]})
+
 (defn start-dsbdp-via-bowerick
   [arg-map]
-  (let [dsl-expression (arg-map :dsl-expression)
+  (let [tmp-expression (arg-map :dsl-expression)
         _ (do (println "Using DSL expression:")
-              (pprint dsl-expression)
+              (pprint tmp-expression)
               (println "---"))
+        dsl-expression (cond
+                         (= 'pcap tmp-expression) pcap-processing-dsl-expression
+                         :default tmp-expression)
         processing-fn (atom (create-proc-fn dsl-expression))
         broker-url (arg-map :url)
         out-prefix (arg-map :output-destination-prefix)
