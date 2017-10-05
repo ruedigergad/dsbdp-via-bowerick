@@ -21,7 +21,7 @@
   (:gen-class))
 
 (def pcap-processing-dsl-expression
-  {:output-type :java-map
+  {:output-type :json-str
    :rules [['pcap-off '(int 16)]
            ['off '(cond
                     (= 2 (int32be (+ pcap-off 0))) (+ pcap-off 4)
@@ -45,22 +45,27 @@
                              [['protocol '(str "UDP")]
                               ['src '(int16 (+ off 20))]
                               ['dst '(int16 (+ off 22))]
-                              ['summary '(str __2_protocol ": " __2_src " -> " __2_dst)]]
+                              ;['summary '(str __2_protocol ": " __2_src " -> " __2_dst)]
+                              
+                              ]
                            '(= 6 __1_protocol-id)
                              [['protocol '(str "TCP")]
                               ['src '(int16 (+ off 20))]
                               ['dst '(int16 (+ off 22))]
                               ['flags-value '(int8 (+ off 33))]
-                              ['flags '(reduce-kv
-                                         #=(eval
-                                             `(fn [r# k# v#]
-                                                (cond
-                                                  (> (bit-and ~'__2_flags-value (bit-shift-left 1 k#)) 0)
-                                                    (conj r# v#)
-                                                  :default r#)))
-                                         #{}
-                                         ["FIN" "SYN" "RST" "PSH" "ACK" "URG" "ECE" "CWR"])]
-                              ['summary '(str __2_protocol __2_flags ": " __2_src " -> " __2_dst)]]
+;                              ['flags '(reduce-kv
+;                                         #=(eval
+;                                             `(fn [r# k# v#]
+;                                                (cond
+;                                                  (> (bit-and ~'__2_flags-value (bit-shift-left 1 k#)) 0)
+;                                                    (conj r# v#)
+;                                                  :default r#)))
+;                                         #{}
+;                                         ["FIN" "SYN" "RST" "PSH" "ACK" "URG" "ECE" "CWR"])]
+;                              ['summary '(str __2_protocol __2_flags ": " __2_src " -> " __2_dst)]
+                              ;['summary '(str __2_protocol ": " __2_src " -> " __2_dst)]
+                              
+                              ]
                          '(= 1 __1_protocol-id)
                            [['protocol '(str "ICMP")]
                             ['type '(condp = (int8 (+ off 20))
@@ -69,9 +74,15 @@
                                       8 "Echo Request"
                                      (str "Unknown ICMP Type:" (int8 (+ off 20))))]
                             ['seq-no '(int16 (+ off 26))]
-                            ['summary '(str "ICMP: " __2_type ", Seq.: " __2_seq-no)]]]]
-                  ['summary '(str __1_protocol ": " __1_src " -> " __1_dst)]]]
-           ['summary '(str protocol ": " src " -> " dst)]]})
+                            ;['summary '(str "ICMP: " __2_type ", Seq.: " __2_seq-no)]
+                            
+                            ]]]
+                  ;['summary '(str __1_protocol ": " __1_src " -> " __1_dst)]
+                  
+                  ]]
+           ;['summary '(str protocol ": " src " -> " dst)]
+           
+           ]})
 
 (defn start-dsbdp-via-bowerick
   [arg-map]
@@ -140,7 +151,7 @@
                     :default "/topic/dsbdp.transformation_1"]
                    ["-O" "--output-type"
                     "The producer type for emitting the output data. Choices: \"json\", \"plain\"."
-                    :default "json"]
+                    :default "plain"]
                    ["-p" "--pool-size"
                     "The bowerick consumer/producer pool size for input/output."
                     :default 1
