@@ -7,7 +7,7 @@
                  [clj-assorted-utils "1.18.2"]
                  [org.clojure/tools.cli "0.3.3"]
                  [dsbdp "0.5.0"]
-                 [bowerick "2.2.0"]]
+                 [bowerick "2.2.1"]]
   :global-vars {*warn-on-reflection* true}
   :profiles  {:repl  {:dependencies  [[jonase/eastwood "0.2.2" :exclusions  [org.clojure/clojure]]]}}
   :plugins [[lein-cloverage "1.0.6"]]
